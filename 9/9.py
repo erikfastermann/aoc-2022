@@ -1,22 +1,12 @@
 from pathlib import Path
 
-motions_raw = [
-    'R 4',
-    'U 4',
-    'L 3',
-    'D 1',
-    'R 4',
-    'D 1',
-    'L 5',
-    'R 2',
-]
 motions_raw = Path('input.txt').read_text().splitlines()
 
 def parse_motions():
-    for direction_and_count in motions_raw:
-        direction, count_raw = direction_and_count.split()
-        count = int(count_raw)
-        yield (direction, count)
+    for direction_and_steps in motions_raw:
+        direction, steps_raw = direction_and_steps.split()
+        steps = int(steps_raw)
+        yield (direction, steps)
 
 motions = list(parse_motions())
 
@@ -40,27 +30,33 @@ def is_touching(tail, head):
                 return True
     return False
 
-def simulate():
-    head = (0, 0)
-    tail = (0, 0)
-    yield tail
-    for direction, count in motions:
-        for _ in range(count):
-            next_head = move(head, direction)
-            if not is_touching(tail, next_head):
-                tail = head
-                yield tail
-            head = next_head
+def cmp(a, b):
+    return (a > b) - (a < b)
 
-def simulate_many(n):
+def move_tail(tail, head):
+    x = cmp(head[0], tail[0])
+    y = cmp(head[1], tail[1])
+    return (tail[0] + x, tail[1] + y)
+
+def simulate_step(knots, direction):
+    knots[0] = move(knots[0], direction)
+    for i in range(1, len(knots)):
+        if not is_touching(knots[i], knots[i-1]):
+            knots[i] = move_tail(knots[i], knots[i-1])
+            assert is_touching(knots[i], knots[i-1])
+        else:
+            break
+
+def simulate(n):
+    assert n >= 2
     knots = [(0, 0)] * n
     yield (0, 0)
-    for direction, count in motions:
-        for _ in range(count):
-            next_position = move(knots[0], direction)
-            for i in range(1, len(knots)):
-                if not is_touching(knots[i], knots[i-1]):
-                    knots[i] = knots[i-1]
-                    # TODO
+    for direction, steps in motions:
+        for _ in range(steps):
+            old_tail = knots[-1]
+            simulate_step(knots, direction)
+            if knots[-1] != old_tail:
+                yield knots[-1]
 
-print(len(set(simulate())))
+print(len(set(simulate(2))))
+print(len(set(simulate(10))))
