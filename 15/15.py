@@ -19,9 +19,9 @@ positions_raw = [
     'Sensor at x=14, y=3: closest beacon is at x=15, y=3',
     'Sensor at x=20, y=1: closest beacon is at x=15, y=3',
 ]
-positions_raw = Path('input.txt').read_text().splitlines()
+#positions_raw = Path('input.txt').read_text().splitlines()
 
-@dataclass
+@dataclass(frozen=True)
 class Position:
     x: int
     y: int
@@ -39,28 +39,62 @@ positions = list(parse())
 def manhatten_distance(sensor, beacon):
     return abs(sensor.x - beacon.x) + abs(sensor.y - beacon.y)
 
-def all_positions_for_row(sensor, absolute_distance, row):
-    y_range = range(sensor.y - absolute_distance, sensor.y + absolute_distance + 1)
-    if row in y_range:
-        d = max(sensor.y, row) - min(sensor.y, row)
-        r = absolute_distance - d
-        for x in range(-r, r+1):
-            yield Position(sensor.x + x, row)
+def row_ranges(sensor, absolute_distance):
+    for y in range(-absolute_distance, absolute_distance + 1):
+        r = absolute_distance - abs(y)
+        yield (range(sensor.x - r, sensor.x + r + 1), sensor.y + y)
 
-def start_and_row_length():
-    start = min(p.beacon.x for p in positions)
-    last = max(p.beacon.x for p in positions)
-    return (start, last - start)
+def start_and_row_count():
+    start = min(p.beacon.y for p in positions)
+    last = max(p.beacon.y for p in positions)
+    return (start, last - start + 1)
 
-def row(n):
-    start, row_length = start_and_row_length()
-    row = [False] * row_length
+def all_row_ranges():
+    start, row_count = start_and_row_count()
+    rows = [[] for _ in range(row_count)]
     for p in positions:
         d = abs(manhatten_distance(p.sensor, p.beacon))
-        for found in all_positions_for_row(p.sensor, d, n):
-            if found == p.sensor or found == p.beacon:
-                continue
-            row[abs(start) + found.x] = True
-    return sum(1 for field in row if field is True)
+        for x_range, y in row_ranges(p.sensor, d):
+            idx = abs(start) + y
+            if idx >= len(rows):
+                break
+            rows[idx].append(x_range)
+    return (start, rows)
 
-print(row(2_000_000))
+def ranges_contain_not(ranges, v):
+    return all(v not in r for r in ranges)
+
+def not_in_ranges(ranges):
+    for r in ranges:
+        x = r.start - 1
+        if ranges_contain_not(ranges, x):
+            yield x
+        x = r.stop
+        if ranges_contain_not(ranges, x):
+            yield x
+
+all_known_positions = set(p for p2 in positions for p in (p2.sensor, p2.beacon))
+
+def valid_position(ranges, lowest, highest, y):
+    for x in not_in_ranges(ranges):
+        if x < lowest or x > highest:
+            continue
+        p = Position(x, y)
+        if p in all_known_positions:
+            continue
+        return p
+
+def find_beacon(lowest, highest):
+    start, rows = all_row_ranges()
+    for y in range(lowest, highest + 1):
+        idx = abs(start) + y
+        if idx >= len(rows):
+            break
+        row = rows[idx]
+        p = valid_position(row, lowest, highest, y)
+        if p is not None:
+            return p
+    raise RuntimeError()
+
+print(find_beacon(0, 20))
+#print(find_beacon(0, 4_000_000))
